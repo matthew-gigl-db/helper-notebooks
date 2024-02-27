@@ -1,6 +1,6 @@
 # Databricks notebook source
 # MAGIC %md
-# MAGIC # United Catalog System Catalog Schema Set Up
+# MAGIC # United Catalog's System Catalog Schema Set Up
 # MAGIC
 # MAGIC There are several schemas that are available for monitoring your Databricks account, however these schemas need to be enabled by a user with account privlidges such as an admin.  
 # MAGIC
@@ -16,24 +16,11 @@
 
 # COMMAND ----------
 
-# Add a widget for workspace id
-dbutils.widgets.text("pat_secret_scope", "", "DB Secret Scope for PAT")
+# Add a widget for the Databricks Secret Scope used for storing the user's Databricks Personal Access Token  
+dbutils.widgets.text("pat_secret_scope", "credentials", "DB Secret Scope for PAT")
 
-# Add a widget for DB PAT
-dbutils.widgets.text("pat_secret", "", "DB Secret for PAT")
-
-# COMMAND ----------
-
-workspace_id = spark.conf.get("spark.databricks.clusterUsageTags.clusterOwnerOrgId")
-workspace_id
-
-# COMMAND ----------
-
-# # return the workspace url from the Databricks Spark Conf, note that you can return all of the Spark configuragion items in an array with the following:  
-# spark_conf = spark.sparkContext.getConf()
-# spark_conf.getAll()
-workspace_url = spark.conf.get("spark.databricks.workspaceUrl")
-print(workspace_url)
+# Add a widget for the Databricks Secret representing the Databricks Personal Access Token  
+dbutils.widgets.text("pat_secret", "databricks_pat", "DB Secret for PAT")
 
 # COMMAND ----------
 
@@ -42,9 +29,15 @@ print(workspace_url)
 
 # COMMAND ----------
 
-bash_command = f"curl -fsSL https://raw.githubusercontent.com/databricks/setup-cli/main/install.sh | sh"
+# install the Databricks CLI using a curl command and capture the response text
+install_cmd_resp = !{"""curl -fsSL https://raw.githubusercontent.com/databricks/setup-cli/main/install.sh | sh"""}
+install_cmd_resp
 
-!{bash_command}
+# COMMAND ----------
+
+# parse the installation command response to know where the CLI was installed.  This may be '/root/bin/databricks' or '/usr/local/bin/databricks'.  
+cli_path = install_cmd_resp[0].split("at ")[1].replace(".", "")
+cli_path
 
 # COMMAND ----------
 
@@ -53,18 +46,43 @@ bash_command = f"curl -fsSL https://raw.githubusercontent.com/databricks/setup-c
 
 # COMMAND ----------
 
-!{"databricks -v"}
+version_cmd = f"{cli_path} -v"
+
+!{version_cmd}
 
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC #### Configure the Databricks CLI by passing in the full workspace URL and the PAT
+# MAGIC #### Configure the Databricks CLI by passing in the full Workspace URL and the PAT
+# MAGIC
+# MAGIC The Workspace URL may be attained from the Databricks Spark Conf.  Note that its possible to return all of the values set in the Spark Conf as an array by running the following code:  
+# MAGIC
+# MAGIC > *spark_conf = spark.sparkContext.getConf()*  
+# MAGIC > *spark_conf.getAll()*  
+# MAGIC >   
+# MAGIC
+# MAGIC The Databricks Personal Access Token (PAT) will be retrieved using the Databricks Secrets Utility.  
 
 # COMMAND ----------
 
-workspace_url = f"""https://{dbutils.widgets.get("workspace_id")}.cloud.databricks.com"""
+# return the workspace url from the Databricks Spark Conf
+workspace_url = spark.conf.get("spark.databricks.workspaceUrl")
 
-configure_command = f"""echo '{dbutils.widgets.get("db_pat")}' | databricks configure --host '{workspace_url}'"""
+# retrieve the user's Databricks Personal Access Token
+db_pat = dbutils.secrets.get(
+  scope = dbutils.widgets.get("pat_secret_scope")
+  ,key = dbutils.widgets.get("pat_secret")
+)
+
+print(f"""
+  Workpace URL: {workspace_url}
+  Databricks PAT: {db_pat}
+""")
+
+# COMMAND ----------
+
+# configure the Databricks CLI on the cluster with the following command
+configure_command = f"""echo '{db_pat}' | databricks configure --host 'https://{workspace_url}'"""
 
 !{configure_command}
 
@@ -76,7 +94,10 @@ configure_command = f"""echo '{dbutils.widgets.get("db_pat")}' | databricks conf
 
 # COMMAND ----------
 
-metastore_summary = !{'databricks metastores summary'} 
+
+metastore_summary_cmd = f"{cli_path} metastores summary"
+
+metastore_summary = !{metastore_summary_cmd } 
 metastore_summary
 
 # COMMAND ----------
@@ -105,7 +126,7 @@ metastore_ids
 
 system_schema_status = []
 for metastore in metastore_ids:
-  systemschemas_command = f"""curl -X GET -H "Authorization: Bearer {dbutils.widgets.get("db_pat")}" "{workspace_url}/api/2.0/unity-catalog/metastores/{metastore}/systemschemas" """
+  systemschemas_command = f"""curl -X GET -H "Authorization: Bearer {db_pat}" "https://{workspace_url}/api/2.0/unity-catalog/metastores/{metastore}/systemschemas" """
   status = !{systemschemas_command}
   status.append(metastore)
   system_schema_status += status
@@ -127,7 +148,6 @@ schema = StructType([
     ,StructField("col6", StringType(), True)
     ,StructField("schema_status", StringType(), True)
     ,StructField("metastore_id", StringType(), True)
-
 ])
 
 # COMMAND ----------
@@ -161,7 +181,7 @@ available_to_enable
 # COMMAND ----------
 
 for system_schema in available_to_enable:
-  enablement_command = f"""curl -v -X PUT -H "Authorization: Bearer {dbutils.widgets.get("db_pat")}" "{workspace_url}/api/2.0/unity-catalog/metastores/{metastore}/systemschemas/{system_schema}" """
+  enablement_command = f"""curl -v -X PUT -H "Authorization: Bearer {db_pat}" "https://{workspace_url}/api/2.0/unity-catalog/metastores/{metastore}/systemschemas/{system_schema}" """
   {enablement_command}
 
 # COMMAND ----------
