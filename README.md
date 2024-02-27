@@ -1,2 +1,2 @@
 # databricks-setup
-Notebooks To Help Various Databricks Setup Steps for Users or Admins
+Notebooks To Help Users or Admins with Various Databricks Setup Steps
