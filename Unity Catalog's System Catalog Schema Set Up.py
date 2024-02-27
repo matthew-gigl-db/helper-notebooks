@@ -8,6 +8,13 @@
 # MAGIC
 # MAGIC * At least one workspace that is set up with Unity Catalog for the account and the **Workspace ID** of one of those UC enabled workspaces.  This notebook should be run on one of those workspaces.  
 # MAGIC * The user running this notebook must have a Databricks Personal Access Token (PAT) saved as a Databricks Secret for the particular workspace used.  The Databricks secret scope and the secret name for the PAT are inputted using Databricks text widgets.  
+# MAGIC
+# MAGIC ***
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## Notebook Set Up
 
 # COMMAND ----------
 
@@ -16,6 +23,7 @@
 
 # COMMAND ----------
 
+# DBTITLE 1,Widgets Set Up
 # Add a widget for the Databricks Secret Scope used for storing the user's Databricks Personal Access Token  
 dbutils.widgets.text("pat_secret_scope", "credentials", "DB Secret Scope for PAT")
 
@@ -25,16 +33,23 @@ dbutils.widgets.text("pat_secret", "databricks_pat", "DB Secret for PAT")
 # COMMAND ----------
 
 # MAGIC %md
+# MAGIC ## Databricks CLI Set Up and Configuration
+
+# COMMAND ----------
+
+# MAGIC %md
 # MAGIC #### Install the Databricks CLI
 
 # COMMAND ----------
 
+# DBTITLE 1,Install the CLI
 # install the Databricks CLI using a curl command and capture the response text
 install_cmd_resp = !{"""curl -fsSL https://raw.githubusercontent.com/databricks/setup-cli/main/install.sh | sh"""}
 install_cmd_resp
 
 # COMMAND ----------
 
+# DBTITLE 1,Capture the CLI Path
 # parse the installation command response to know where the CLI was installed.  This may be '/root/bin/databricks' or '/usr/local/bin/databricks'.  
 cli_path = install_cmd_resp[0].split("at ")[1].replace(".", "")
 cli_path
@@ -46,6 +61,7 @@ cli_path
 
 # COMMAND ----------
 
+# DBTITLE 1,Check CLI Version and Installation
 version_cmd = f"{cli_path} -v"
 
 !{version_cmd}
@@ -65,6 +81,7 @@ version_cmd = f"{cli_path} -v"
 
 # COMMAND ----------
 
+# DBTITLE 1,Retrieve the Workspace URL and Personal Access Token
 # return the workspace url from the Databricks Spark Conf
 workspace_url = spark.conf.get("spark.databricks.workspaceUrl")
 
@@ -81,10 +98,22 @@ print(f"""
 
 # COMMAND ----------
 
+# DBTITLE 1,Configure the CLI
 # configure the Databricks CLI on the cluster with the following command
-configure_command = f"""echo '{db_pat}' | databricks configure --host 'https://{workspace_url}'"""
+configure_command = f"""echo '{db_pat}' | {cli_path} configure --host 'https://{workspace_url}'"""
 
 !{configure_command}
+
+# COMMAND ----------
+
+# DBTITLE 1,Check Configuration
+check_cli_cmd = f"{cli_path} current-user me"
+!{check_cli_cmd}
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## Unity Catalog System Catalog Set Up
 
 # COMMAND ----------
 
@@ -94,6 +123,7 @@ configure_command = f"""echo '{db_pat}' | databricks configure --host 'https://{
 
 # COMMAND ----------
 
+# DBTITLE 1,Metastore Summary
 
 metastore_summary_cmd = f"{cli_path} metastores summary"
 
@@ -102,28 +132,32 @@ metastore_summary
 
 # COMMAND ----------
 
+# DBTITLE 1,Convert to JSON
 # Convert metastore_summary string to JSON string
 metastore_json_string = ''.join(metastore_summary)
 metastore_json_string
 
 # COMMAND ----------
 
+# DBTITLE 1,Convert JSON to Spark Dataframe
 # Create DataFrame with the json string
 df = spark.read.json(spark.sparkContext.parallelize([metastore_json_string]))
 display(df)
 
 # COMMAND ----------
 
+# DBTITLE 1,Return the Metastore IDs
 metastore_ids = df.select("metastore_id").rdd.flatMap(lambda x: x).collect()
 metastore_ids
 
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC #### Check the status of the systemschemas for the metastore ids
+# MAGIC #### Check the status of the system catalog schemas for the metastore ids
 
 # COMMAND ----------
 
+# DBTITLE 1,Get the schema statuses for each metastore
 system_schema_status = []
 for metastore in metastore_ids:
   systemschemas_command = f"""curl -X GET -H "Authorization: Bearer {db_pat}" "https://{workspace_url}/api/2.0/unity-catalog/metastores/{metastore}/systemschemas" """
@@ -131,12 +165,11 @@ for metastore in metastore_ids:
   status.append(metastore)
   system_schema_status += status
 
-# turn into json
-# system_schema_status = "".join(system_schema_status)
 system_schema_status
 
 # COMMAND ----------
 
+# DBTITLE 1,Create a schema to load the schema statuses into a Spark Dataframe
 from pyspark.sql.types import StructType, StructField, StringType, ArrayType, MapType
 
 schema = StructType([
@@ -152,12 +185,14 @@ schema = StructType([
 
 # COMMAND ----------
 
+# DBTITLE 1,Example JSON to learn the JSON scehma of the schema_status
 sample_schema_status_json = """
 {"schemas":[{"schema":"storage","state":"ENABLE_COMPLETED"},{"schema":"access","state":"ENABLE_COMPLETED"},{"schema":"billing","state":"ENABLE_COMPLETED"},{"schema":"compute","state":"ENABLE_COMPLETED"},{"schema":"marketplace","state":"ENABLE_COMPLETED"},{"schema":"operational_data","state":"UNAVAILABLE"},{"schema":"lineage","state":"ENABLE_COMPLETED"},{"schema":"information_schema","state":"ENABLE_COMPLETED"}]}
 """
 
 # COMMAND ----------
 
+# DBTITLE 1,Create the schema status dataframe
 from pyspark.sql.functions import col, explode, from_json, schema_of_json
 
 schema_status_df = (spark
@@ -174,15 +209,46 @@ display(schema_status_df)
 
 # COMMAND ----------
 
+# MAGIC %md
+# MAGIC ### Enable Available System Catalog Schemas
+
+# COMMAND ----------
+
+# DBTITLE 1,Check for available system catalog scehmas to enable
 available_to_enable = schema_status_df.filter(col("state") == "AVAILABLE").select("schema").rdd.flatMap(lambda x: x).collect()
 
 available_to_enable
 
 # COMMAND ----------
 
+# DBTITLE 1,Define enablement function as Spark UDF
+from pyspark.sql.functions import pandas_udf
+from pyspark.sql.functions import udf, udtf
+from pyspark.sql.types import BooleanType
+import requests
+
+def enable_system_schema_func(metastore_id, schema, state, databricks_pat, workspace_url):
+  if state == "AVAILABLE":
+    requests.put(url = f"""/api/2.1/unity-catalog/metastores/{metastore_id}/systemschemas/{schema_name} """)
+    enablement_cmd = f"""curl -v -X PUT -H "Authorization: Bearer {databricks_pat}" "https://{workspace_url}/api/2.0/unity-catalog/metastores/{metastore_id}/systemschemas/{schema}" """
+    !{enablement_cmd}
+    return True
+  elif state == "ENABLE_COMPLETED":
+    return True
+  else:
+    return False
+  
+enable_system_schema = pandas_udf(enable_system_schema_func, BooleanType())
+
+# COMMAND ----------
+
+schema_status_df.withColumn("enabled", enable_system_schema(col("metastore_id"), col("schema"), col("state"), db_pat, workspace_url))
+
+# COMMAND ----------
+
 for system_schema in available_to_enable:
   enablement_command = f"""curl -v -X PUT -H "Authorization: Bearer {db_pat}" "https://{workspace_url}/api/2.0/unity-catalog/metastores/{metastore}/systemschemas/{system_schema}" """
-  {enablement_command}
+  !{enablement_command}
 
 # COMMAND ----------
 
