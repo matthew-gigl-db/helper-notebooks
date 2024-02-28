@@ -193,75 +193,68 @@ display(schema_status_df)
 
 # COMMAND ----------
 
-# DBTITLE 1,Check for available system catalog scehmas to enable
-available_to_enable = schema_status_df.filter(col("state") == "AVAILABLE").select("schema").rdd.flatMap(lambda x: x).collect()
-
-available_to_enable
+# MAGIC %md
+# MAGIC #### Define a Spark UDF to Enable Any Schemas in each Metastore with an "AVAILABLE" State
 
 # COMMAND ----------
 
-import requests
+# DBTITLE 1,Define enablement spark UDF
+from pyspark.sql.types import IntegerType
 
-def enable_system_schema_func(metastore_id: str, schema: str, state: str, databricks_pat: str = db_pat, workspace_url: str = workspace_url) -> str:
+@udf(IntegerType())
+def enable_system_schema(metastore_id: str, schema: str, state: str, databricks_pat: str = db_pat, workspace_url: str = workspace_url) -> int:
   if state == "AVAILABLE":
     url = f"https://{workspace_url}/api/2.1/unity-catalog/metastores/{metastore_id}/systemschemas/{schema}"
     headers = {"Authorization": f"Bearer {databricks_pat}"}
     response = requests.put(url, headers=headers)
-    return response.json()
-  elif state == "ENABLE_COMPLETED":
-    return {"message": "Schema reviously enabaled."}
-  elif state == "UNAVAILABLE":
-    return {"message": "Schema Unavailable."}
-  else:
-    return {"message": "Check schema state."}
-  
-  
+    return response.status_code
 
 # COMMAND ----------
 
-response = enable_system_schema_func(
-  metastore_id = "fe90da00-0714-4d15-b3ed-60de3697184a"
-  ,schema = "access"
-  ,state = "AVAILABLE"
+# DBTITLE 1,Execute the UDF Against the Dataframe
+enable_df = (schema_status_df
+  .withColumn("enablement_status_code",
+    enable_system_schema(
+      metastore_id=col("metastore_id")
+      ,schema=col("schema")
+      ,state=col("state")
+    ))
 )
 
-# COMMAND ----------
-
-response.json()
+display(enable_df)
 
 # COMMAND ----------
 
-# DBTITLE 1,Define enablement function as Spark UDF
-from pyspark.sql.functions import pandas_udf
-from pyspark.sql.functions import udf, udtf
-from pyspark.sql.types import BooleanType
-import requests
-
-def enable_system_schema_func(metastore_id, schema, state, databricks_pat, workspace_url):
-  if state == "AVAILABLE":
-    requests.put(url = f"""/api/2.1/unity-catalog/metastores/{metastore_id}/systemschemas/{schema_name} """)
-    enablement_cmd = f"""curl -v -X PUT -H "Authorization: Bearer {databricks_pat}" "https://{workspace_url}/api/2.0/unity-catalog/metastores/{metastore_id}/systemschemas/{schema}" """
-    !{enablement_cmd}
-    return True
-  elif state == "ENABLE_COMPLETED":
-    return True
-  else:
-    return False
-  
-enable_system_schema = pandas_udf(enable_system_schema_func, BooleanType())
+# MAGIC %md
+# MAGIC Status codes of 200 indicate that the schema was successfully enabled.  Null values result for schemas that the API was not called on, such as for schemas that are already enabled ("ENABLE_COMPLETED") or currently unavailable.  
 
 # COMMAND ----------
 
-schema_status_df.withColumn("enabled", enable_system_schema(col("metastore_id"), col("schema"), col("state"), db_pat, workspace_url))
-
-# COMMAND ----------
-
-for system_schema in available_to_enable:
-  enablement_command = f"""curl -v -X PUT -H "Authorization: Bearer {db_pat}" "https://{workspace_url}/api/2.0/unity-catalog/metastores/{metastore}/systemschemas/{system_schema}" """
-  !{enablement_command}
+# MAGIC %md
+# MAGIC ## Verify a new System Catalog Schema is available in Unity Catalog
 
 # COMMAND ----------
 
 # MAGIC %sql 
 # MAGIC
-# MAGIC select * from system.access.audit
+# MAGIC select * from system.access.audit limit 10
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## Bonus: Disable System Schema Function
+
+# COMMAND ----------
+
+# DBTITLE 1,Define function to disable a system schema
+def disable_system_schema(metastore_id: str, schema: str, databricks_pat: str = db_pat, workspace_url: str = workspace_url) -> int:
+  url = f"https://{workspace_url}/api/2.1/unity-catalog/metastores/{metastore_id}/systemschemas/{schema}"
+  headers = {"Authorization": f"Bearer {databricks_pat}"}
+  response = requests.delete(url, headers=headers)
+  return response.status_code
+
+# COMMAND ----------
+
+# DBTITLE 1,Not run: disable schema example
+# # not run 
+# disable_system_schema(metastore_id="fe90da00-0714-4d15-b3ed-60de3697184a", schema="storage")
