@@ -158,51 +158,30 @@ metastore_ids
 # COMMAND ----------
 
 # DBTITLE 1,Get the schema statuses for each metastore
+import requests
+
 system_schema_status = []
 for metastore in metastore_ids:
-  systemschemas_command = f"""curl -X GET -H "Authorization: Bearer {db_pat}" "https://{workspace_url}/api/2.0/unity-catalog/metastores/{metastore}/systemschemas" """
-  status = !{systemschemas_command}
-  status.append(metastore)
-  system_schema_status += status
+  url = f"""https://{workspace_url}/api/2.0/unity-catalog/metastores/{metastore}/systemschemas"""
+  headers = {"Authorization": f"Bearer {db_pat}"}
+  response = requests.get(url = url, headers = headers)
+  status = response.json()
+  status["metastore_id"] = metastore
+  system_schema_status.append(status)
 
 system_schema_status
 
 # COMMAND ----------
 
-# DBTITLE 1,Create a schema to load the schema statuses into a Spark Dataframe
-from pyspark.sql.types import StructType, StructField, StringType, ArrayType, MapType
+from pyspark.sql.functions import col, explode
 
-schema = StructType([
-    StructField("col1", StringType(), True)
-    ,StructField("col2", StringType(), True)
-    ,StructField("col3", StringType(), True)
-    ,StructField("col4", StringType(), True)
-    ,StructField("col5", StringType(), True)
-    ,StructField("col6", StringType(), True)
-    ,StructField("schema_status", StringType(), True)
-    ,StructField("metastore_id", StringType(), True)
-])
-
-# COMMAND ----------
-
-# DBTITLE 1,Example JSON to learn the JSON scehma of the schema_status
-sample_schema_status_json = """
-{"schemas":[{"schema":"storage","state":"ENABLE_COMPLETED"},{"schema":"access","state":"ENABLE_COMPLETED"},{"schema":"billing","state":"ENABLE_COMPLETED"},{"schema":"compute","state":"ENABLE_COMPLETED"},{"schema":"marketplace","state":"ENABLE_COMPLETED"},{"schema":"operational_data","state":"UNAVAILABLE"},{"schema":"lineage","state":"ENABLE_COMPLETED"},{"schema":"information_schema","state":"ENABLE_COMPLETED"}]}
-"""
-
-# COMMAND ----------
-
-# DBTITLE 1,Create the schema status dataframe
-from pyspark.sql.functions import col, explode, from_json, schema_of_json
-
-schema_status_df = (spark
-  .createDataFrame(spark.sparkContext.parallelize([system_schema_status]), schema = schema)
-  .withColumn("schema_status", from_json(col("schema_status"), schema=schema_of_json(sample_schema_status_json)))
-  .withColumn("schemas", explode(col("schema_status.schemas")))
+schema_status_df = (spark.createDataFrame(
+    spark.sparkContext.parallelize(system_schema_status), ["metastore_id","schemas"]
+  )
+  .withColumn("schemas", explode(col("schemas")))
   .withColumn("schema", col("schemas.schema"))
   .withColumn("state", col("schemas.state"))
   .select("metastore_id", "schema", "state")
-
 )
 
 display(schema_status_df)
@@ -228,7 +207,13 @@ def enable_system_schema_func(metastore_id: str, schema: str, state: str, databr
     url = f"https://{workspace_url}/api/2.1/unity-catalog/metastores/{metastore_id}/systemschemas/{schema}"
     headers = {"Authorization": f"Bearer {databricks_pat}"}
     response = requests.put(url, headers=headers)
-    return response
+    return response.json()
+  elif state == "ENABLE_COMPLETED":
+    return {"message": "Schema reviously enabaled."}
+  elif state == "UNAVAILABLE":
+    return {"message": "Schema Unavailable."}
+  else:
+    return {"message": "Check schema state."}
   
   
 
