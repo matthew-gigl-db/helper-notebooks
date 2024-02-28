@@ -51,7 +51,10 @@ install_cmd_resp
 
 # DBTITLE 1,Capture the CLI Path
 # parse the installation command response to know where the CLI was installed.  This may be '/root/bin/databricks' or '/usr/local/bin/databricks'.  
-cli_path = install_cmd_resp[0].split("at ")[1].replace(".", "")
+if install_cmd_resp[0][0:4] == "Inst":
+  cli_path = install_cmd_resp[0].split("at ")[1].replace(".", "")
+else:
+  cli_path = install_cmd_resp[0].split(" ")[2]
 cli_path
 
 # COMMAND ----------
