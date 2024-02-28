@@ -44,7 +44,7 @@ dbutils.widgets.text("pat_secret", "databricks_pat", "DB Secret for PAT")
 
 # DBTITLE 1,Install the CLI
 # install the Databricks CLI using a curl command and capture the response text
-install_cmd_resp = !{"""curl -fsSL https://raw.githubusercontent.com/databricks/setup-cli/main/install.sh | sh"""}
+install_cmd_resp = !{"curl -fsSL https://raw.githubusercontent.com/databricks/setup-cli/main/install.sh | sh"}
 install_cmd_resp
 
 # COMMAND ----------
@@ -218,6 +218,31 @@ display(schema_status_df)
 available_to_enable = schema_status_df.filter(col("state") == "AVAILABLE").select("schema").rdd.flatMap(lambda x: x).collect()
 
 available_to_enable
+
+# COMMAND ----------
+
+import requests
+
+def enable_system_schema_func(metastore_id: str, schema: str, state: str, databricks_pat: str = db_pat, workspace_url: str = workspace_url) -> str:
+  if state == "AVAILABLE":
+    url = f"https://{workspace_url}/api/2.1/unity-catalog/metastores/{metastore_id}/systemschemas/{schema}"
+    headers = {"Authorization": f"Bearer {databricks_pat}"}
+    response = requests.put(url, headers=headers)
+    return response
+  
+  
+
+# COMMAND ----------
+
+response = enable_system_schema_func(
+  metastore_id = "fe90da00-0714-4d15-b3ed-60de3697184a"
+  ,schema = "access"
+  ,state = "AVAILABLE"
+)
+
+# COMMAND ----------
+
+response.json()
 
 # COMMAND ----------
 
