@@ -112,6 +112,11 @@ scopes
 
 # COMMAND ----------
 
+user_name = spark.sql("select current_user()")
+display(user_name)
+
+# COMMAND ----------
+
 # DBTITLE 1,Check if the "credentials" scope is already available.
 if 'credentials  DATABRICKS' in scopes: 
   print("The credentials scope is already set up.")
