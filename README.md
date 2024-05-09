@@ -1,4 +1,4 @@
-# databricks-setup
+# helper-notebooks
 Notebooks To Help Users or Admins with Various Databricks Setup Steps
 
 Current notebooks available: 

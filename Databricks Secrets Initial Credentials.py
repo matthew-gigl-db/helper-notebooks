@@ -2,6 +2,10 @@
 # MAGIC %md
 # MAGIC # Databricks Secrets Initial Credentials Set Up
 # MAGIC
+# MAGIC > **Special Note: This version of credentials set up only works with Databricks Classic Compute Runtimes.  Please see the follow notebook for setting up credentials with Serverless Compute and a more modern method with the Databricks Python SDK:**  
+# MAGIC > [https://github.com/matthew-gigl-db/helper-notebooks](https://github.com/matthew-gigl-db/helper-notebooks)  
+# MAGIC   
+# MAGIC
 # MAGIC The purpose of this notebook is to programatically allow a Databricks user to establish a personal Databricks Secret Scope for storing the user's credentials starting with the user's Databricks Personal Access Token, which is required for using the Databricks APIs or to configure the Databricks CLI.  
 # MAGIC
 # MAGIC This notebook is intended to be run interactively by the user.  A Databricks Text widget allows the user to input their Databricks Personal Access token, and then after a successful run of the commands, the widget is removed to prevent any accidental storing of the PAT in the Databricks workspace.  
@@ -12,11 +16,11 @@
 # MAGIC 1. Installs the lastest version of the Databricks CLI on the cluster and capture where that installation was saved for use in future shell commands.  
 # MAGIC 1. Checks that the Databricks CLI was installed correctly.  
 # MAGIC 1. Configures the Databricks CLI using the workspace URL (captured from the Databricks Spark Conf), and the user inputted Personal Access Token.  
-# MAGIC 1. Using the Databricks CLI, list the existing Secret Scopes available to the user.  If "credentials" doesn't exist, use the CLI to register that scope new.  
-# MAGIC 1. Using the Databricks Secrets API, create or update the "databricks_pat" secret in the "credentials" scope and verify that its set correctly.  
+# MAGIC 1. Using the Databricks CLI, list the existing Secret Scopes available in the workspace.  If scope based on the user id doesn't exist, use the CLI to register that scope new.  
+# MAGIC 1. Using the Databricks Secrets API, create or update the "databricks_pat" secret in the user's "credentials" scope and verify that its set correctly.  
 # MAGIC 1. Remove the **db_pat** widget from the Notebook to prevent any accidental storage.  
 # MAGIC
-# MAGIC Run this notebook as often as the Databricks PAT needs to be updated.  Once the initial "credentials" scope has been created another notebook may be used to add or update additional Databricks Secrets or Secret Scopes.  
+# MAGIC Run this notebook as often as the Databricks PAT needs to be updated.  Once the initial user's "credentials" scope has been created another notebook may be used to add or update additional Databricks Secrets or Secret Scopes.  
 
 # COMMAND ----------
 
@@ -99,7 +103,7 @@ configure_command = f"""echo '{db_pat}' | {cli_path} configure --host 'https://{
 # COMMAND ----------
 
 # MAGIC %md 
-# MAGIC ### Create the 'credentials' scope and populate it with the 'databricks_pat' secret
+# MAGIC ### Create the user's 'credentials' scope based on the user name and populate it with the 'databricks_pat' secret
 
 # COMMAND ----------
 
@@ -112,11 +116,17 @@ scopes
 
 # COMMAND ----------
 
+user_name = spark.sql("select current_user()").collect()[0][0]
+scope_name = user_name.split(sep="@")[0].replace(".", "-")
+scope_name
+
+# COMMAND ----------
+
 # DBTITLE 1,Check if the "credentials" scope is already available.
-if 'credentials  DATABRICKS' in scopes: 
+if f"{scope_name}  DATABRICKS" in scopes: 
   print("The credentials scope is already set up.")
 else: 
-  create_scope_cmd = f"{cli_path} secrets create-scope credentials"
+  create_scope_cmd = f"{cli_path} secrets create-scope {scope_name}"
   !{create_scope_cmd}
 
 # COMMAND ----------
@@ -125,7 +135,7 @@ else:
 # use the Secrets API to add or edit the PAT as a secret to the credentials scope.  
 secrets_api_cmd = f"""curl --request POST "https://{workspace_url}/api/2.0/secrets/put" \
      --header "Authorization: Bearer {db_pat}" \
-     --data '{{"scope": "credentials", "key": "databricks_pat", "string_value": "{db_pat}"}}' """
+     --data '{{"scope": "{scope_name}", "key": "databricks_pat", "string_value": "{db_pat}"}}' """
 
 !{secrets_api_cmd}
 
@@ -138,7 +148,7 @@ secrets_api_cmd = f"""curl --request POST "https://{workspace_url}/api/2.0/secre
 
 # DBTITLE 1,Test the new secret is correct
 # test the secret 
-dbutils.secrets.get("credentials", "databricks_pat") == db_pat
+dbutils.secrets.get(scope_name, "databricks_pat") == db_pat
 
 # COMMAND ----------
 
