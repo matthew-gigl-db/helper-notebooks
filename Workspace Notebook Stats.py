@@ -1,10 +1,14 @@
 # Databricks notebook source
+dbutils.widgets.text("path", "/", "Workspace Path")
+
+# COMMAND ----------
+
 from databricks.sdk import WorkspaceClient
 wc = WorkspaceClient()
 
 # COMMAND ----------
 
-notebooks = wc.workspace.list(path = "/", recursive=True)
+notebooks = wc.workspace.list(path = dbutils.widgets.get("path"), recursive=True)
 
 # COMMAND ----------
 
@@ -13,7 +17,14 @@ type(notebooks)
 # COMMAND ----------
 
 notebooks_list = list(notebooks)
-notebooks_list[0]
+
+# COMMAND ----------
+
+notebooks_list
+
+# COMMAND ----------
+
+type(notebooks_list)
 
 # COMMAND ----------
 
