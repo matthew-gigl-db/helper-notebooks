@@ -8,3 +8,4 @@ For all users:
 
 For Unity Catalog admins:
   * **Unity Catalog's System Catalog Schema Set Up** helps an admin with account or metastore management permissons the ability to monitor and enable new schemas that might become available the "system" catalog.  The "system" catalog has several schemas already that help with monitoring all workspaces in an account including for auditing user commands and access, or for monitoring FinOps.  
+  * **Workspace Notebook Stats** uses the Databricks Python SDK to retrieve details about all of the notebooks stored recursively at a given path in the Databricks workspace.  
