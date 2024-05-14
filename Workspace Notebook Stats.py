@@ -129,3 +129,54 @@ notebooks_df.createOrReplaceTempView("tv_notebook_details")
 # MAGIC %md
 # MAGIC ***
 # MAGIC Now that we have our dataframe registered as Spark temporary view, we can switch to SQL and perform some basic analysis on our notebooks.  
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC select 
+# MAGIC   count(object_id) as tot_object_cnt 
+# MAGIC from 
+# MAGIC   tv_notebook_details
+# MAGIC ;
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC select 
+# MAGIC   object_type
+# MAGIC   ,count(object_id) as object_cnt
+# MAGIC from 
+# MAGIC   tv_notebook_details
+# MAGIC group by
+# MAGIC   object_type
+# MAGIC ;
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC select 
+# MAGIC   language
+# MAGIC   ,count(object_id) as object_cnt
+# MAGIC from 
+# MAGIC   tv_notebook_details
+# MAGIC where 
+# MAGIC   language is not null
+# MAGIC group by
+# MAGIC   language
+# MAGIC ;
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC select
+# MAGIC   language
+# MAGIC   ,date(created_at) as created_at
+# MAGIC   ,date(modified_at) as modified_at
+# MAGIC   ,count(language) as cnt
+# MAGIC from
+# MAGIC   tv_notebook_details
+# MAGIC where
+# MAGIC   language is not null
+# MAGIC group by
+# MAGIC   1, 2, 3
+# MAGIC ;
