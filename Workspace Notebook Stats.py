@@ -111,6 +111,7 @@ display(notebooks_df)
 
 # COMMAND ----------
 
+# DBTITLE 1,Convert Timestamps in Notebooks DataFrame
 
 notebooks_df = (
   notebooks_df
@@ -132,6 +133,7 @@ notebooks_df.createOrReplaceTempView("tv_notebook_details")
 
 # COMMAND ----------
 
+# DBTITLE 1,Notebook Object Count
 # MAGIC %sql
 # MAGIC select 
 # MAGIC   count(object_id) as tot_object_cnt 
@@ -141,6 +143,7 @@ notebooks_df.createOrReplaceTempView("tv_notebook_details")
 
 # COMMAND ----------
 
+# DBTITLE 1,Notebook Object Count by Type
 # MAGIC %sql
 # MAGIC select 
 # MAGIC   object_type
@@ -153,6 +156,7 @@ notebooks_df.createOrReplaceTempView("tv_notebook_details")
 
 # COMMAND ----------
 
+# DBTITLE 1,Notebook Language Statistics
 # MAGIC %sql
 # MAGIC select 
 # MAGIC   language
@@ -167,6 +171,7 @@ notebooks_df.createOrReplaceTempView("tv_notebook_details")
 
 # COMMAND ----------
 
+# DBTITLE 1,Language Count by Date
 # MAGIC %sql
 # MAGIC select
 # MAGIC   language
