@@ -26,6 +26,7 @@ dbutils.widgets.text("secret_key_value", "", "Secret Key Value")
 secret_scope = dbutils.widgets.get("secret_scope")
 secret_scope_key = dbutils.widgets.get("secret_key")
 secret_key_value = dbutils.widgets.get("secret_key_value")
+multi_line_secret_key_value = """<paste multiple line secret key value here, useful for PEM files>"""
 
 # COMMAND ----------
 
@@ -58,14 +59,17 @@ else:
 
 # DBTITLE 1,Set the Databricks Secret Key with a New Value
 if secret_key_value not in [None, '']:
-  w.secrets.put_secret(scope=secret_scope, key=secret_scope_key, string_value=secret_key_value)
+  if multi_line_secret_key_value not in [None, '', """<paste multiple line secret key value here, useful for PEM files>"""]: 
+    w.secrets.put_secret(scope=secret_scope, key=secret_scope_key, string_value=secret_key_value)
+  else:
+    w.secrets.put_secret(scope=secret_scope, key=secret_scope_key, string_value=multi_line_secret_key_value)
 
 # COMMAND ----------
 
 # DBTITLE 1,Retrieving Encryption Key from Databricks Secrets
-dbutils.secrets.get(scope=secret_scope, key=secret_scope_key) == secret_key_value
+dbutils.secrets.get(scope=secret_scope, key=secret_scope_key) in [secret_key_value, multi_line_secret_key_value]
 
 # COMMAND ----------
 
 # DBTITLE 1,Clean Up
-dbutils.widgets.removeAll()
+# dbutils.widgets.removeAll()
