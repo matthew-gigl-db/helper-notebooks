@@ -58,11 +58,11 @@ else:
 # COMMAND ----------
 
 # DBTITLE 1,Set the Databricks Secret Key with a New Value
-if secret_key_value not in [None, '']:
-  if multi_line_secret_key_value not in [None, '', """<paste multiple line secret key value here, useful for PEM files>"""]: 
+if multi_line_secret_key_value not in [None, '', """<paste multiple line secret key value here, useful for PEM files>"""]: 
+  w.secrets.put_secret(scope=secret_scope, key=secret_scope_key, string_value=multi_line_secret_key_value)
+else:
+  if secret_key_value not in [None, '']:
     w.secrets.put_secret(scope=secret_scope, key=secret_scope_key, string_value=secret_key_value)
-  else:
-    w.secrets.put_secret(scope=secret_scope, key=secret_scope_key, string_value=multi_line_secret_key_value)
 
 # COMMAND ----------
 
