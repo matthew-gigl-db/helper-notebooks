@@ -9,6 +9,7 @@ dbutils.library.restartPython()
 
 # COMMAND ----------
 
+# DBTITLE 1,Define Secret Scope Based on User Name
 user_name = spark.sql("select current_user()").collect()[0][0]
 scope_name = user_name.split(sep="@")[0].replace(".", "-")
 scope_name
@@ -26,7 +27,8 @@ dbutils.widgets.text("secret_key_value", "", "Secret Key Value")
 secret_scope = dbutils.widgets.get("secret_scope")
 secret_scope_key = dbutils.widgets.get("secret_key")
 secret_key_value = dbutils.widgets.get("secret_key_value")
-multi_line_secret_key_value = """<paste multiple line secret key value here, useful for PEM files>"""
+# multi_line_secret_key_value = """<paste multiple line secret key value here, useful for PEM files>"""
+multi_line_secret_key_value = None
 
 # COMMAND ----------
 
